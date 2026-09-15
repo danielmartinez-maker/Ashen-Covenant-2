@@ -1,0 +1,16 @@
+# CMake
+/build/
+CMakeUserPresets.json
+
+# IDE/editor
+.vscode/
+.idea/
+*.user
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local worktrees
+.worktrees/
