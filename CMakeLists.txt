@@ -61,7 +61,9 @@ ac2_enable_warnings(ashen_covenant_2)
 
 include(CTest)
 if(BUILD_TESTING)
-    add_executable(ac2_tests tests/smoke/BootstrapTests.cpp)
+    add_executable(ac2_tests
+        tests/smoke/BootstrapTests.cpp
+        tests/core/FixedStepClockTests.cpp)
     target_link_libraries(ac2_tests PRIVATE Catch2::Catch2WithMain ac2_core ac2_input ac2_simulation ac2_render_model)
     ac2_enable_warnings(ac2_tests)
     list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
