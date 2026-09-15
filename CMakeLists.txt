@@ -47,9 +47,12 @@ ac2_enable_warnings(ac2_core)
 add_library(ac2_input INTERFACE)
 target_include_directories(ac2_input INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_library(ac2_simulation INTERFACE)
-target_include_directories(ac2_simulation INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(ac2_simulation INTERFACE ac2_core ac2_input EnTT::EnTT)
+add_library(ac2_simulation STATIC
+    src/simulation/MovementSystem.cpp
+    src/simulation/Simulation.cpp)
+target_include_directories(ac2_simulation PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(ac2_simulation PUBLIC ac2_core ac2_input PRIVATE EnTT::EnTT)
+ac2_enable_warnings(ac2_simulation)
 
 add_library(ac2_render_model INTERFACE)
 target_include_directories(ac2_render_model INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)

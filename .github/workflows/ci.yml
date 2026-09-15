@@ -17,6 +17,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Cache headless dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/ci-headless/_deps
+          key: ac2-headless-deps-${{ runner.os }}-entt-4.0.0-catch2-3.15.3-v1
+
       - name: Configure headless
         run: cmake --preset ci-headless
       - name: Build headless
@@ -25,7 +32,7 @@ jobs:
         run: ctest --preset ci-headless --output-on-failure
 
   desktop-build-test:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || contains(github.event.head_commit.message, '[desktop]')
     strategy:
       fail-fast: false
       matrix:
