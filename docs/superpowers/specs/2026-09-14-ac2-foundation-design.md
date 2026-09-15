@@ -11,93 +11,75 @@
 
 ## 1. Purpose
 
-This document defines the initial production architecture for Ashen Covenant 2 (AC2). AC2 is a new native C++ codebase. It carries forward the useful game-design lessons of Ashen Covenant without inheriting the original browser/Electron runtime architecture.
+This document defines the initial production architecture for Ashen Covenant 2 (AC2). AC2 is a new native C++ codebase. It carries forward useful game-design lessons from Ashen Covenant without inheriting the original browser/Electron runtime architecture.
 
-The first implementation milestone must establish a small, testable vertical foundation that can support the full game without prematurely implementing every planned subsystem.
+The first implementation milestone establishes a small, testable vertical foundation capable of supporting the full game without prematurely implementing every planned subsystem.
 
-The architecture is designed around six constraints:
+The architecture is built around six constraints:
 
 1. Responsive action-RPG combat requires predictable timing and explicit gameplay rules.
 2. Simulation logic must be testable without graphics, audio, or a window.
-3. Presentation must be able to become visually extravagant through Covenant Metamorphosis without coupling rendering to gameplay state transitions.
+3. Presentation must support increasingly extravagant Covenant Metamorphosis without coupling rendering to gameplay authority.
 4. Classes, skills, enemies, items, and balance values must be primarily data-authored while behavioral invariants remain native code.
 5. The 300-level progression design requires validation and specialization constraints from the beginning.
-6. Save compatibility, deterministic behavior where required, and regression resistance are production requirements rather than cleanup tasks.
+6. Save compatibility, reproducibility where required, and regression resistance are production requirements.
 
 ## 2. Technology Decisions
 
 ### 2.1 C++20
 
-C++20 is the baseline language standard. Newer language/library features may be adopted only when all supported CI compilers provide reliable support.
+C++20 is the baseline language standard.
 
 Rules:
 
 - RAII owns resources.
 - Raw owning pointers are prohibited.
 - Exceptions do not cross core game-loop boundaries; expected failures use explicit result/error types.
-- Public module interfaces avoid exposing SDL or EnTT types unless the module is explicitly an adapter for that library.
+- Public gameplay interfaces avoid exposing SDL types.
+- Public domain interfaces avoid exposing EnTT unless the interface is specifically an entity-storage adapter.
 - Gameplay behavior favors explicit data and functions over deep inheritance hierarchies.
 
 ### 2.2 CMake
 
-CMake is the canonical build system. Targets are separated by responsibility rather than compiling the entire project as one monolith.
+CMake is the canonical build system. Targets are separated by responsibility rather than compiling the project as one monolith.
 
 Initial targets:
 
-- `ac2_core` — low-level dependency-free utilities and timing primitives.
-- `ac2_simulation` — headless deterministic-capable gameplay simulation.
-- `ac2_game` — game-domain orchestration and authored systems.
+- `ac2_core` — dependency-light utilities and fixed-step timing primitives.
+- `ac2_simulation` — headless gameplay simulation.
+- `ac2_game` — game-domain orchestration.
 - `ac2_platform_sdl` — SDL window, events, devices, and platform services.
 - `ac2_render_sdlgpu` — GPU renderer and presentation adapters.
 - `ashen_covenant_2` — desktop executable/composition root.
 - `ac2_tests` — headless unit and simulation tests.
 
-Third-party dependencies must be isolated behind targets and pinned to known versions. Dependency fetching should be reproducible.
+Third-party dependencies are isolated behind targets and pinned to known versions. Dependency fetching must be reproducible.
 
 ### 2.3 SDL3
 
-SDL3 provides:
-
-- window/application lifecycle,
-- keyboard/mouse/controller input,
-- platform events,
-- timing primitives where appropriate,
-- GPU device/window integration,
-- audio/device integration when the audio layer is introduced.
-
-Gameplay code must not call SDL directly.
+SDL3 provides window/application lifecycle, keyboard/mouse/controller input, platform events, device integration, GPU window integration, and later audio-device integration. Gameplay code does not call SDL directly.
 
 ### 2.4 SDL3 GPU API
 
-The initial renderer uses the SDL3 GPU API. The renderer receives immutable render-facing snapshots/commands rather than reading and mutating gameplay state directly.
+The initial renderer uses the SDL3 GPU API. It receives render-facing snapshots/commands instead of mutating gameplay state.
 
-This boundary exists so rendering can later support:
-
-- layered 2D characters,
-- 2.5D depth and parallax,
-- dynamic lights,
-- particles,
-- post-processing,
-- Covenant mutation overlays,
-- off-screen rendering and scaling,
-
-without contaminating simulation logic.
+This boundary permits layered 2D characters, 2.5D depth/parallax, dynamic lighting, particles, post-processing, Covenant mutation overlays, and off-screen rendering without contaminating simulation logic.
 
 ### 2.5 EnTT
 
-EnTT supplies entity identity, component storage, and efficient iteration. EnTT is infrastructure, not the game architecture itself.
+EnTT supplies runtime entity identity, component storage, and efficient iteration. It is infrastructure rather than the architecture itself.
 
 Rules:
 
 - Components contain state; systems contain behavior.
-- Major game rules must remain discoverable in named systems/services.
-- No generic event soup that makes combat ordering implicit.
+- Major game rules remain discoverable in named systems/services.
+- Combat/system ordering cannot depend on an implicit event-subscriber order.
 - Cross-domain changes use typed commands/events with documented ordering.
 - Save files never serialize raw EnTT internals or transient entity identifiers.
 
 ## 3. Repository Structure
 
-The intended root layout is:
+Intended root layout:
 
 ```text
 Ashen-Covenant-2/
@@ -146,11 +128,9 @@ Ashen-Covenant-2/
 └── tools/
 ```
 
-Directories are introduced only as real code requires them. Empty speculative modules should not be created merely to match this diagram.
+Directories are introduced only when real code requires them. Empty speculative modules are not created simply to match the diagram.
 
 ## 4. Dependency Direction
-
-Dependency direction is intentionally strict.
 
 ```text
 app/composition
@@ -170,24 +150,23 @@ app/composition
 core <-----------------------------------------+
 ```
 
-Additional rules:
+Rules:
 
 - `core` depends on the C++ standard library only unless a dependency is explicitly justified.
-- gameplay domains cannot depend on renderer or windowing code.
-- renderer may consume presentation DTOs/snapshots generated from game state.
-- input translates device state into semantic player commands before entering simulation.
-- save code serializes stable domain records, not transient engine representation.
-- the executable is the composition root and is responsible for wiring concrete adapters to interfaces.
-
-Circular target dependencies are forbidden.
+- Gameplay domains cannot depend on renderer or windowing code.
+- Renderer consumes presentation DTOs/snapshots generated from game state.
+- Input translates device state into semantic player commands before simulation.
+- Save code serializes stable domain records, not transient engine representation.
+- The executable is the composition root and wires concrete adapters to interfaces.
+- Circular target dependencies are forbidden.
 
 ## 5. Main Loop and Time Model
 
 ### 5.1 Fixed simulation
 
-Gameplay simulation runs at **60 Hz** (`1/60 s` logical step).
+Gameplay simulation runs at **60 Hz** (`1/60 s` per logical step).
 
-The desktop loop performs:
+Desktop loop:
 
 1. pump platform events,
 2. sample devices,
@@ -198,28 +177,30 @@ The desktop loop performs:
 7. render with interpolation,
 8. present.
 
-The simulation never receives arbitrary wall-clock delta time.
+Simulation never receives arbitrary wall-clock delta time.
 
-### 5.2 Spiral-of-death protection
+### 5.2 Catch-up policy
 
-The accumulator has a maximum catch-up budget. If the application stalls severely, AC2 records telemetry/debug diagnostics and prevents an unbounded tick loop. The exact production cap is tuned after profiling; tests must cover the cap behavior.
+The initial maximum catch-up budget is **five fixed simulation ticks per rendered frame**. When more than five ticks of accumulated time remain after a severe stall, the loop executes five ticks, discards excess accumulated whole-tick time, preserves the valid fractional remainder used for render interpolation, and records a diagnostic counter/message. This prevents the spiral of death and makes overload behavior testable.
+
+The value may be retuned only from profiling evidence, with tests updated to preserve bounded behavior.
 
 ### 5.3 Pause and time scaling
 
 Pause and gameplay time manipulation are simulation concepts. Wall-clock/platform timing does not become gameplay timing.
 
-### 5.4 Determinism
+### 5.4 Reproducibility
 
-The initial game is offline and deterministic networking is out of scope. However, reproducibility is valuable for tests, replays/debug traces, combat validation, and save regression.
+The initial game is offline; deterministic networking is outside current scope. Reproducibility is still required for tests, combat validation, debugging traces, and save regression.
 
 Therefore:
 
 - simulation RNG uses explicit seeded streams,
 - systems do not use global random generators,
 - gameplay does not read wall-clock time,
-- iteration order must be explicit where ordering can change outcomes,
-- floating-point determinism across unrelated architectures is not promised at milestone 1,
-- deterministic test scenarios on the same supported toolchain/platform must be reproducible.
+- iteration order is explicit wherever ordering can alter an outcome,
+- bit-identical floating-point determinism across unrelated architectures is not a milestone-1 promise,
+- deterministic scenarios on the same supported toolchain/platform must reproduce their results.
 
 ## 6. Entity and Simulation Model
 
@@ -227,26 +208,11 @@ Therefore:
 
 Runtime entities are EnTT entities. Persistent game objects receive stable domain IDs when persistence is required.
 
-Typical components will eventually include:
-
-- transform,
-- velocity/motion intent,
-- faction/team,
-- health/resource pools,
-- combat statistics,
-- collision shape,
-- ability state,
-- status effects,
-- AI state,
-- inventory/equipment links,
-- Covenant state,
-- presentation descriptor.
-
-The milestone implements only components needed by the first vertical slice.
+Potential components include transform, motion intent, faction, resources, combat statistics, collision, ability state, status effects, AI state, equipment links, Covenant state, and presentation descriptors. Milestone 1 implements only the components required by the vertical slice.
 
 ### 6.2 System ordering
 
-Simulation execution order is defined centrally rather than inferred from file names or event subscribers. A representative eventual order is:
+Simulation execution order is defined centrally rather than inferred from file names or subscribers. Representative eventual order:
 
 1. consume commands,
 2. update state gates/status timers,
@@ -260,17 +226,13 @@ Simulation execution order is defined centrally rather than inferred from file n
 10. emit presentation events,
 11. finalize deferred entity changes.
 
-Actual systems are added only when implemented, but ordering remains explicit.
+Only implemented systems participate, but their relative ordering is explicit.
 
 ### 6.3 Deferred structural mutations
 
-Creating/destroying entities or making structural changes during sensitive iterations is deferred through typed command buffers when necessary. The flush point is defined by simulation phase.
+Entity creation/destruction and structural changes during sensitive iteration are deferred through typed command buffers when needed. Flush points are defined by simulation phase.
 
 ## 7. Input Architecture
-
-SDL device events are converted into a game-owned input model.
-
-Layers:
 
 ```text
 SDL events/device state
@@ -286,15 +248,13 @@ PlayerCommand frame
 Simulation
 ```
 
-Simulation commands express intent such as move, aim, dodge, light attack, heavy attack, ability slot activation, interaction, or menu intent. They do not contain SDL scancodes.
+Simulation commands express game intent such as movement, aim, dodge, light/heavy attack, ability activation, and interaction. They never contain SDL scancodes.
 
-This permits controller remapping, AI command injection, deterministic tests, and later replay tooling without simulating physical devices.
+This permits controller remapping, AI command injection, headless tests, and later replay tooling without emulating physical devices.
 
 ## 8. Combat Architecture
 
-Combat must remain explicit because it is AC2's primary feel-critical subsystem.
-
-The eventual combat pipeline is:
+Combat remains explicit because it is AC2's primary feel-critical subsystem.
 
 ```text
 Command
@@ -305,128 +265,91 @@ Command
   → HitIntent
   → defense/evasion/block/parry checks
   → DamageContext construction
-  → modifiers
+  → ordered modifiers
   → damage/resource/status resolution
   → combat events
   → presentation events
 ```
 
-Key data types should distinguish intent from resolved outcomes. A hit request must not directly subtract health.
+Combat invariants:
 
-Combat invariants include:
+- Hit intent and resolved outcome are different types/stages.
+- One authoritative path resolves final damage.
+- Modifier ordering is documented and testable.
+- Hit identity can prevent unintended repeated hits.
+- Animation/presentation cannot grant gameplay authority.
+- Invulnerability/state gates are gameplay state.
+- Covenant mutations operate through defined combat hooks rather than renderer special cases.
 
-- one authoritative place resolves final damage,
-- modifier ordering is documented and testable,
-- hit identity can prevent unintended repeated hits,
-- animation/presentation cannot grant gameplay authority,
-- invulnerability and state gates live in gameplay state,
-- Covenant mutations modify defined combat hooks rather than special-casing the renderer.
-
-Milestone 1 establishes interfaces/types only where required; it does not prematurely implement the complete combat system.
+Milestone 1 avoids prematurely implementing the complete combat system.
 
 ## 9. Progression Architecture
 
-AC2 supports **300 character levels** with **one skill point per level**, subject to the final level-1 allocation rule defined by game design.
+AC2 supports **300 character levels and exactly one normal skill point earned at each level, including level 1**. A character reaching level 300 therefore earns **300 normal level-derived skill points** before any separately designed quest/reward bonuses. Any future bonus-point source must use an explicit separate rule and cannot silently alter this invariant.
 
-The progression model must support:
+The progression model supports:
 
-- more purchasable nodes than total obtainable points,
+- more purchasable nodes than obtainable points,
 - prerequisites,
 - rank caps,
 - level gates,
 - mutually exclusive choices,
 - Covenant specialization requirements,
 - respec validation,
-- four intended viable build families per class without hard-locking players into named presets,
-- deterministic validation of a build from data,
-- future migration when skill graphs change between save versions.
+- four intended viable build families per class without forcing named preset builds,
+- deterministic build validation,
+- save migration when graphs change.
 
 Skill graphs are authored data. C++ validates graph structure and applies known effect primitives/behavior hooks.
 
-A skill node definition conceptually contains:
-
-```text
-stable id
-class id
-cost
-max rank
-prerequisites
-gates/exclusions
-effect descriptors
-tags
-presentation metadata
-```
-
-Stable IDs are never derived from display names.
+A node definition conceptually contains stable ID, class ID, cost, max rank, prerequisites, gates/exclusions, effect descriptors, tags, and presentation metadata. Stable IDs are never derived from display names.
 
 ## 10. Covenant Architecture
 
-Covenant Metamorphosis is a first-class domain system.
+Covenant Metamorphosis is a first-class domain system with three separable outputs:
 
-It has three separable outputs:
+1. **Gameplay mutation** — ability transformations, stats, resources, triggers, and rule changes.
+2. **State/identity mutation** — Covenant allegiance, thresholds, specialization, and progression state.
+3. **Presentation mutation** — silhouette extensions, particles, spectral structures, materials, audio layers, and screen effects.
 
-1. **Gameplay mutation** — ability transformations, stats, resources, triggers, rule changes.
-2. **State/identity mutation** — Covenant allegiance, thresholds, specialization, progression state.
-3. **Presentation mutation** — silhouette extensions, particles, spectral structures, materials, audio layers, screen effects.
+Renderer receives presentation descriptors/events generated from Covenant state but cannot determine gameplay effects.
 
-The renderer receives presentation descriptors/events generated from Covenant state but cannot determine gameplay effects.
-
-This supports the visual direction in which ordinary characters maintain recognizable class silhouettes while higher Metamorphosis increasingly extends supernatural elements outside those silhouettes.
-
-Covenant specializations transform a class's established mechanics rather than replacing the base class with an unrelated implementation.
+This supports a restrained normal class silhouette that gains supernatural extensions as Metamorphosis rises. Covenant specializations transform established class mechanics rather than replacing the base class with an unrelated implementation.
 
 ## 11. Data-Driven Content
 
 Authored content includes classes, abilities, skill nodes, Covenant definitions, enemies, items, drop tables, and tuning values.
 
-Initial data format is JSON unless implementation experience demonstrates a specific limitation. Schemas/validators are mandatory for production content categories.
+Initial data format is JSON. Production content categories receive validators before content depends on them at scale.
 
 Principles:
 
 - behavior primitives and safety invariants live in C++,
-- authored combinations and tuning live in data,
-- stable machine IDs are separate from localized/display strings,
+- authored combinations/tuning live in data,
+- stable machine IDs are separate from display/localized strings,
 - data load failures report file, record ID, field, and cause,
-- invalid critical gameplay data prevents entering gameplay rather than silently falling back,
-- tests validate graph integrity and referential integrity.
+- invalid critical gameplay data prevents gameplay entry rather than silently falling back,
+- tests validate graph and referential integrity.
 
 A scripting language is explicitly deferred.
 
 ## 12. Rendering Architecture
 
-Rendering uses a command/snapshot model.
+Rendering uses a command/snapshot boundary. Game/simulation exposes presentation-safe data such as camera information, sprite/layer descriptors, interpolation transforms, animation state IDs, effect events, Covenant visual descriptors, and optional debug primitives.
 
-The simulation/game layer exposes presentation-safe data such as:
+Renderer owns GPU resources and draw translation. Logical resolution, batching, materials/pipelines, atlases, particles, lighting, render targets, and post-processing remain rendering concerns.
 
-- camera target information,
-- sprite/layer descriptors,
-- transforms and interpolation states,
-- animation state IDs,
-- effect spawn events,
-- Covenant visual descriptors,
-- debug primitives when enabled.
-
-The renderer owns GPU resources and translation into draw work.
-
-Rendering concerns may include logical resolution, scaling, render targets, batching, materials/pipelines, sprite atlases, particles, lighting, and post-processing. These do not become simulation dependencies.
-
-The first renderer only needs enough capability to prove the architecture: window/device creation, clear/present, camera transform, and a minimal visible player/world primitive or sprite path.
+Milestone 1 renderer proves the architecture with window/device creation, clear/present, camera transform, and a minimal visible player/world primitive or sprite path.
 
 ## 13. Asset Architecture
 
-Assets are addressed through stable logical asset IDs rather than arbitrary relative paths spread through gameplay code.
+Assets are addressed through stable logical asset IDs rather than arbitrary relative paths spread through gameplay code. Asset ownership is centralized. GPU resources are renderer-owned; source metadata is game/tooling data.
 
-Asset ownership is centralized. GPU resources are renderer-owned; source asset metadata is game/tooling data.
-
-Milestone 1 may use placeholder/generated visual data so architecture work is not blocked on final art.
-
-Hot reload is desirable for authored content but is not a milestone-1 requirement.
+Milestone 1 can use placeholder/generated visual data so architecture work is independent of final art. Hot reload is deferred.
 
 ## 14. Save Architecture
 
-Save compatibility starts with version 1.
-
-A save contains an explicit schema version. Loading follows:
+Save compatibility begins at schema version 1.
 
 ```text
 bytes/file
@@ -440,29 +363,21 @@ bytes/file
 
 Rules:
 
-- never serialize memory layouts directly,
+- never serialize C++ memory layouts directly,
 - never store raw pointers,
-- never depend on EnTT entity numeric values for persistence,
+- never persist raw EnTT entity numeric values,
 - persistent references use stable IDs,
 - migrations are explicit and tested,
-- save writes eventually use atomic/replace-safe semantics,
-- corrupted or incompatible saves fail with actionable diagnostics.
+- production save writes use atomic/replace-safe semantics,
+- corrupted/incompatible saves fail with actionable diagnostics.
 
-A fully featured save system is not required in milestone 1, but the domain boundaries must not make versioned serialization difficult later.
+Full save functionality is outside milestone 1, but no milestone-1 boundary may require raw runtime representation to become the persistent format.
 
 ## 15. Error Handling and Diagnostics
 
-Errors are classified broadly as:
+Errors are classified as programmer invariant failures, recoverable runtime failures, content validation failures, platform/graphics initialization failures, or persistence failures.
 
-- programmer invariant failures,
-- recoverable runtime failures,
-- content validation failures,
-- platform/graphics initialization failures,
-- persistence failures.
-
-Debug builds should fail loudly on violated invariants. Production failures should retain useful context instead of swallowing errors.
-
-Logging categories will eventually include platform, render, simulation, combat, data, save, and performance. Logging must not become a hidden dependency required for correctness.
+Debug builds fail loudly on programmer invariants. Recoverable production failures retain actionable context rather than being swallowed. Logging remains diagnostic and cannot be required for correctness.
 
 ## 16. Testing Strategy
 
@@ -470,90 +385,81 @@ Testability is an architectural constraint.
 
 ### 16.1 Headless tests
 
-Most gameplay tests run without SDL initialization or a GPU.
+Gameplay tests run without SDL/GPU initialization unless they are explicitly platform/render integration tests.
 
-Required categories as systems arrive:
+Coverage grows with systems and includes:
 
-- core utilities/time,
-- fixed-step accumulator behavior,
+- fixed-step accumulator and five-tick catch-up policy,
 - input command mapping independent of devices,
-- entity/system sequencing,
+- system sequencing,
+- player movement,
 - combat resolution,
 - progression graph validation,
-- 300-level point-budget constraints,
+- 300-level/300-point budget rules,
 - Covenant mutation rules,
-- data validation,
-- save round trips and migrations,
-- deterministic scenario hashes/snapshots where appropriate.
+- data/referential validation,
+- save round trips/migrations,
+- reproducible scenarios where appropriate.
 
 ### 16.2 Test-driven changes
 
-New production behavior begins with a failing test whenever the behavior is practically testable. Platform/GPU glue receives focused integration/smoke coverage rather than forcing brittle unit mocks.
+New production behavior starts with a failing test whenever practically testable. Platform/GPU glue uses focused integration/smoke coverage instead of brittle unit mocks.
 
-### 16.3 Smoke test
+### 16.3 Desktop smoke path
 
-The milestone desktop smoke path must initialize, run the loop, simulate a player, render a visible frame, and shut down cleanly.
+Milestone desktop smoke must initialize, run the loop, simulate a player, render visible output, and shut down cleanly.
 
 ## 17. Continuous Integration
 
-Initial CI target matrix:
+Initial matrix:
 
-- Windows — MSVC, current supported runner.
-- Linux — GCC or Clang, current supported runner.
+- Windows with MSVC.
+- Linux with GCC or Clang.
 
-CI performs at minimum:
-
-1. configure,
-2. compile with warnings enabled,
-3. run headless tests,
-4. report failures without suppressing compiler/test output.
-
-Warnings should be treated strictly for AC2-owned targets once third-party warning isolation is established.
-
-Formatting/static analysis may be added incrementally; they must not block initial architecture on tooling churn.
+CI performs configure, compile with warnings enabled, headless tests, and unsuppressed failure reporting. AC2-owned code moves to warnings-as-errors once third-party warning isolation is confirmed.
 
 ## 18. Performance Principles
 
-No optimization by intuition.
+Optimization must be measurement-driven.
 
-Initial principles:
+Principles:
 
-- avoid per-frame heap churn in hot paths where measurement shows significance,
-- use contiguous component storage appropriately,
+- avoid frame/tick heap churn in measured hot paths,
+- use component storage appropriately,
 - separate render extraction from simulation mutation,
 - keep fixed-tick work bounded,
-- profile before introducing caches or complex job systems,
-- maintain representative performance scenarios as the project grows.
+- profile before introducing caches or complex concurrency,
+- retain representative performance scenarios as the game grows.
 
-A custom multithreaded job system is explicitly out of scope for milestone 1.
+A custom job system is out of milestone-1 scope.
 
 ## 19. First Vertical Foundation
 
-Milestone 1 is complete when the repository contains a functioning architecture slice with:
+Milestone 1 is complete only when the repository has:
 
 1. reproducible CMake configuration,
 2. pinned SDL3 and EnTT dependencies,
 3. native desktop executable,
 4. SDL application/window lifecycle,
-5. SDL3 GPU initialization and basic frame presentation,
-6. fixed 60 Hz simulation accumulator,
+5. SDL3 GPU initialization/basic frame presentation,
+6. fixed 60 Hz accumulator with five-tick catch-up cap,
 7. headless `Simulation` entry point,
 8. EnTT world/registry owned behind game-domain boundaries,
 9. semantic input command model,
 10. player entity/state,
-11. basic player movement processed by fixed ticks,
+11. basic player movement processed only by fixed ticks,
 12. camera/presentation extraction,
-13. renderer consuming presentation data rather than gameplay internals,
+13. renderer consuming presentation data instead of gameplay internals,
 14. clean shutdown/resource destruction,
-15. native automated tests for fixed-step timing and player movement,
-16. CI for Windows and Linux,
-17. developer README with configure/build/test/run commands.
+15. automated native tests for accumulator policy and player movement,
+16. Windows and Linux CI,
+17. developer README containing configure/build/test/run commands.
 
-A colored/debug primitive is acceptable for the first player rendering path. Final class artwork is outside this architecture milestone.
+A debug primitive is acceptable for first player rendering. Final class artwork is outside this milestone.
 
 ## 20. Explicit Non-Goals for Milestone 1
 
-Do not build these during foundation work unless they become necessary to satisfy an item above:
+Do not build the following unless an item above demonstrably requires it:
 
 - final combat implementation,
 - complete class kits,
@@ -571,26 +477,27 @@ Do not build these during foundation work unless they become necessary to satisf
 - mod SDK,
 - final graphical effects.
 
-Interfaces should avoid blocking these features, but speculative abstractions are not a substitute for requirements.
+Interfaces should avoid blocking known future features, but speculative abstractions are not substitutes for requirements.
 
 ## 21. Architecture Acceptance Criteria
 
 The foundation is acceptable only if:
 
 - headless simulation compiles without SDL/GPU dependencies leaking into gameplay targets,
-- the executable can create a window, simulate, render, and close cleanly,
+- executable creates a window, simulates, renders, and closes cleanly,
 - simulation tick rate is fixed independently of render cadence,
-- tests can drive player commands without a physical keyboard/controller,
-- gameplay state changes can be verified without inspecting renderer output,
+- overload/catch-up policy is bounded and tested,
+- tests drive player commands without a physical device,
+- gameplay changes are testable without inspecting renderer output,
 - renderer consumes a defined presentation boundary,
-- dependency graph has no circular module relationships,
-- warnings/tests are not disabled to obtain green CI,
-- architecture remains understandable from target/module interfaces without requiring knowledge of EnTT internals,
-- implementation remains deliberately small enough to evolve after real combat and content constraints are discovered.
+- target dependency graph contains no circular relationships,
+- warnings/tests are never disabled to obtain green CI,
+- architecture can be understood from target/module interfaces without knowledge of EnTT internals,
+- implementation remains small enough to evolve after real combat/content constraints are learned.
 
 ## 22. Follow-On Sequence
 
-After milestone 1, architecture should grow through tested vertical slices rather than broad empty scaffolding. The recommended sequence is:
+After milestone 1, grow through tested vertical slices:
 
 1. combat kernel and hit/damage context,
 2. animation/state synchronization and attack timelines,
@@ -605,8 +512,8 @@ After milestone 1, architecture should grow through tested vertical slices rathe
 11. world/encounter state,
 12. presentation depth, effects, audio, and tooling driven by demonstrated needs.
 
-Each follow-on subsystem requires its own focused design/implementation cycle when architectural interfaces materially change.
+Each follow-on subsystem receives a focused design/implementation cycle when it materially changes architectural interfaces.
 
 ## 23. Guiding Rule
 
-AC2 should make gameplay rules explicit, simulation testable, content authorable, and presentation free to become spectacular without becoming authoritative. The architecture should remain smaller than the game it supports.
+AC2 makes gameplay rules explicit, simulation testable, content authorable, and presentation free to become spectacular without becoming authoritative. The architecture should remain smaller than the game it supports.
