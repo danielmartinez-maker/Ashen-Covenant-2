@@ -8,7 +8,24 @@ on:
   pull_request:
 
 jobs:
-  build-test:
+  headless-build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure headless
+        run: cmake --preset ci-headless
+      - name: Build headless
+        run: cmake --build --preset ci-headless
+      - name: Test headless
+        run: ctest --preset ci-headless --output-on-failure
+
+  desktop-build-test:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
@@ -29,9 +46,9 @@ jobs:
             libdbus-1-dev libibus-1.0-dev libudev-dev libthai-dev libusb-1.0-0-dev \
             libpipewire-0.3-dev libwayland-dev libdecor-0-dev liburing-dev
 
-      - name: Configure
+      - name: Configure desktop
         run: cmake --preset dev
-      - name: Build
+      - name: Build desktop
         run: cmake --build --preset dev
-      - name: Test
+      - name: Test desktop
         run: ctest --preset dev --output-on-failure

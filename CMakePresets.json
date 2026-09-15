@@ -13,7 +13,19 @@
       "binaryDir": "${sourceDir}/build/dev",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "BUILD_TESTING": "ON"
+        "BUILD_TESTING": "ON",
+        "AC2_BUILD_DESKTOP": "ON"
+      }
+    },
+    {
+      "name": "ci-headless",
+      "displayName": "AC2 Headless CI",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ci-headless",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON",
+        "AC2_BUILD_DESKTOP": "OFF"
       }
     }
   ],
@@ -21,12 +33,23 @@
     {
       "name": "dev",
       "configurePreset": "dev"
+    },
+    {
+      "name": "ci-headless",
+      "configurePreset": "ci-headless"
     }
   ],
   "testPresets": [
     {
       "name": "dev",
       "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ci-headless",
+      "configurePreset": "ci-headless",
       "output": {
         "outputOnFailure": true
       }
