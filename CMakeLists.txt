@@ -33,8 +33,10 @@ function(ac2_enable_warnings target)
     endif()
 endfunction()
 
-add_library(ac2_core INTERFACE)
-target_include_directories(ac2_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+add_library(ac2_core STATIC
+    src/core/FixedStepClock.cpp)
+target_include_directories(ac2_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+ac2_enable_warnings(ac2_core)
 
 add_library(ac2_input INTERFACE)
 target_include_directories(ac2_input INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
