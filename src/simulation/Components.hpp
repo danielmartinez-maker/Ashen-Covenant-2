@@ -7,6 +7,11 @@ struct Transform {
     float y{};
 };
 
+struct PreviousTransform {
+    float x{};
+    float y{};
+};
+
 struct MoveSpeed {
     float units_per_second{6.0F};
 };

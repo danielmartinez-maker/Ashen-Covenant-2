@@ -54,9 +54,11 @@ target_include_directories(ac2_simulation PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
 target_link_libraries(ac2_simulation PUBLIC ac2_core ac2_input PRIVATE EnTT::EnTT)
 ac2_enable_warnings(ac2_simulation)
 
-add_library(ac2_render_model INTERFACE)
-target_include_directories(ac2_render_model INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(ac2_render_model INTERFACE ac2_simulation)
+add_library(ac2_render_model STATIC
+    src/render/PresentationExtractor.cpp)
+target_include_directories(ac2_render_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(ac2_render_model PUBLIC ac2_simulation)
+ac2_enable_warnings(ac2_render_model)
 
 if(AC2_BUILD_DESKTOP)
     add_library(ac2_platform_sdl INTERFACE)

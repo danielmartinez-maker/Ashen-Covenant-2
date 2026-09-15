@@ -21,6 +21,7 @@ public:
     void tick(const ac2::input::PlayerCommand& command);
 
     [[nodiscard]] Transform player_transform() const;
+    [[nodiscard]] Transform player_previous_transform() const;
     [[nodiscard]] std::uint64_t tick_index() const noexcept;
 
 private:
